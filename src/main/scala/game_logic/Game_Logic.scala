@@ -11,21 +11,21 @@ type Board = ParMap[Coord2D, Stone]
 
 object GameLogic {
 
-  // Direcoes ortogonais possiveis (cima, baixo, esquerda, direita)
+  // Direcoes ortogonais: direita, esquerda, baixo, cima
   val directions: List[(Int, Int)] = List((0, 1), (0, -1), (1, 0), (-1, 0))
 
-  // Devolve a pedra adversaria (pattern matching - Ficha 2)
+  // Devolve a pedra adversaria - pattern matching (Ficha 2)
   def opponent(player: Stone): Stone = player match {
     case Stone.Black => Stone.White
     case Stone.White => Stone.Black
   }
 
-  // ---------- inicializacao do tabuleiro ---------- //
+  // ---------- inicializacao do tabuleiro (T2) ----------
 
-  // Gera todas as posicoes com pedras alternadas
+  // Gera todas as posicoes do tabuleiro com pedras alternadas usando tail recursion (Ficha 2)
   @tailrec
-  def generatePositions(rows: Int, cols: Int, r: Int, c: Int,
-                        acc: List[(Coord2D, Stone)]): List[(Coord2D, Stone)] = {
+  private def generatePositions(rows: Int, cols: Int, r: Int, c: Int,
+                                acc: List[(Coord2D, Stone)]): List[(Coord2D, Stone)] = {
     if (r >= rows) acc
     else if (c >= cols) generatePositions(rows, cols, r + 1, 0, acc)
     else {
@@ -34,85 +34,27 @@ object GameLogic {
     }
   }
 
-  // Inicializa o board e devolve
+  // Inicializa o tabuleiro removendo uma pedra Black e uma White adjacente do centro
+  // Devolve (Board, lista de coordenadas livres iniciais)
   def initBoard(rows: Int, cols: Int): (Board, List[Coord2D]) = {
-    val fullBoard: Map[Coord2D, Stone] = generatePositions(rows, cols, 0, 0, Nil).toMap
+    val positions = generatePositions(rows, cols, 0, 0, Nil)
+    val fullMap   = positions.toMap
 
-    // Remover uma preta e uma branca adjacentes do centro
-    val centerR = rows / 2
-    val centerC = cols / 2
-    val blackCoord = if ((centerR + centerC) % 2 == 0) (centerR, centerC)
-    else (centerR - 1, centerC)
-    val whiteCoord = (blackCoord._1, blackCoord._2 + 1)
+    // Remove do centro: Black em (centerR, centerC) e White em (centerR, centerC+1)
+    // Garante padrao alternado: soma par = Black, soma impar = White
+    val centerR = rows / 2 - 1
+    val centerC = cols / 2 - 1
+    val blackCoord = (centerR, centerC)
+    val whiteCoord = (centerR, centerC + 1)
 
-    val board = (fullBoard - blackCoord - whiteCoord).par
-    val openCoords = List(blackCoord, whiteCoord)
+    val board = (fullMap - blackCoord - whiteCoord).par
+    val openCoords: List[Coord2D] = List(blackCoord, whiteCoord)
     (board, openCoords)
   }
 
-  // ---------- Funcoes auxiliares ---------- //
-
-  // Verifica se uma coordenada esta na lista de posicoes livres
-  @tailrec
-  def isOpen(coord: Coord2D, lstOpenCoords: List[Coord2D]): Boolean = {
-    lstOpenCoords match {
-      case Nil => false
-      case head :: tail =>
-        if (head == coord) true
-        else isOpen(coord, tail)
-    }
-  }
-
-  // Remove a primeira ocorrencia de uma coordenada da lista
-
-  def removeCoord(coord: Coord2D, lst: List[Coord2D]): List[Coord2D] = {
-    lst match {
-      case Nil => Nil
-      case head :: tail =>
-        if (head == coord) tail
-        else head :: removeCoord(coord, tail)
-    }
-  }
-
-  // Encontra jogadas validas para uma peca numa dada posicao
-  // (filter + map - Ficha 3)
-  def movesForPiece(coord: Coord2D, board: Map[Coord2D, Stone], player: Stone,
-                    lstOpenCoords: List[Coord2D]): List[(Coord2D, Coord2D)] = {
-    directions.filter { case (dr, dc) =>
-      val mid = (coord._1 + dr, coord._2 + dc)
-      val dest = (coord._1 + 2 * dr, coord._2 + 2 * dc)
-      board.get(mid) match {
-        case Some(s) => s == opponent(player) && isOpen(dest, lstOpenCoords)
-        case None => false
-      }
-    }.map { case (dr, dc) =>
-      (coord, (coord._1 + 2 * dr, coord._2 + 2 * dc))
-    }
-  }
-
-  // Devolve todas as jogadas validas para um jogador
-  // (recursao com pattern matching + filter - Fichas 2, 3)
-  def getValidMoves(board: Board, player: Stone,
-                    lstOpenCoords: List[Coord2D]): List[(Coord2D, Coord2D)] = {
-    val seqBoard = board.seq
-
-    // Filtra apenas as pecas do jogador
-    val playerPieces = seqBoard.toList.filter { case (_, stone) => stone == player }
-
-    // Recolhe jogadas para cada peca (recursao explicita - Ficha 2)
-    def collectMoves(pieces: List[(Coord2D, Stone)]): List[(Coord2D, Coord2D)] = {
-      pieces match {
-        case Nil => Nil
-        case (coord: Coord2D, _) :: tail =>
-          movesForPiece(coord, seqBoard.toMap, player, lstOpenCoords) ++ collectMoves(tail)
-      }
-    }
-
-    collectMoves(playerPieces)
-  }
-
   // ---------- T1: randomMove ----------
-  // Gera uma coordenada aleatoria a partir da lista de posicoes livres
+
+  // Seleciona uma coordenada aleatoria da lista de posicoes livres
   // Recebe e devolve MyRandom para manter pureza funcional (Ficha 6)
   def randomMove(lstOpenCoords: List[Coord2D], rand: MyRandom): (Coord2D, MyRandom) = {
     val (index, nextRand) = rand.nextInt(lstOpenCoords.size)
@@ -120,119 +62,140 @@ object GameLogic {
   }
 
   // ---------- T2: play ----------
-  // Move a pedra de coordFrom para coordTo se for uma captura valida
-  // Devolve (Some(novoBoard), novasCoordLivres) ou (None, coordLivres)
-  // (pattern matching + Option - Fichas 2, 5)
+
+  // Move a pedra do jogador de coordFrom para coordTo (salto simples sobre uma pedra inimiga)
+  // Devolve (Some(novoBoard), novasCoordLivres) se valido, (None, coordLivres) caso contrario
+  // Funcao pura com dados imutaveis (Fichas 5, 6)
   def play(board: Board, player: Stone, coordFrom: Coord2D, coordTo: Coord2D,
            lstOpenCoords: List[Coord2D]): (Option[Board], List[Coord2D]) = {
-    val dr = coordTo._1 - coordFrom._1
-    val dc = coordTo._2 - coordFrom._2
-    val mid = (coordFrom._1 + dr / 2, coordFrom._2 + dc / 2)
-    val seqBoard = board.seq
 
-    // Validar: deve ser exatamente 2 casas numa direcao ortogonal
-    val validDirection = ((dr == 2 || dr == -2) && dc == 0) ||
-      (dr == 0 && (dc == 2 || dc == -2))
+    val (r1, c1) = coordFrom
+    val (r2, c2) = coordTo
+    val dr = r2 - r1
+    val dc = c2 - c1
 
-    // Validar: coordFrom tem a pedra do jogador
-    val hasPlayerStone = seqBoard.get(coordFrom) match {
-      case Some(s) => s == player
-      case None => false
-    }
+    // Salto valido: exactamente 2 casas numa direccao ortogonal
+    val isValidDirection = (dr == 0 && math.abs(dc) == 2) || (dc == 0 && math.abs(dr) == 2)
+    val enemyCoord: Coord2D = (r1 + dr / 2, c1 + dc / 2)
 
-    // Validar: posicao do meio tem pedra adversaria
-    val hasOpponentMid = seqBoard.get(mid) match {
-      case Some(s) => s == opponent(player)
-      case None => false
-    }
+    val isValid = isValidDirection &&
+      board.get(coordFrom).contains(player) &&
+      board.get(enemyCoord).contains(opponent(player)) &&
+      lstOpenCoords.contains(coordTo)
 
-    // Validar: destino esta livre
-    val destEmpty = isOpen(coordTo, lstOpenCoords)
-
-    if (validDirection && hasPlayerStone && hasOpponentMid && destEmpty) {
-      val newBoard = (seqBoard - coordFrom - mid + (coordTo -> player)).par
-      val newOpenCoords = coordFrom :: mid :: removeCoord(coordTo, lstOpenCoords)
-      (Some(newBoard), newOpenCoords)
+    if (isValid) {
+      val newBoard = board - coordFrom - enemyCoord + (coordTo -> player)
+      // coordFrom e enemyCoord ficam livres; coordTo fica ocupada
+      val newOpen  = coordFrom :: enemyCoord :: lstOpenCoords.filterNot(_ == coordTo)
+      (Some(newBoard), newOpen)
     } else {
       (None, lstOpenCoords)
     }
   }
 
+  // ---------- Auxiliares de validacao de jogadas ----------
+
+  // Devolve todos os movimentos validos (salto simples) para um jogador
+  // Usa list comprehension monadica - funcao de ordem superior (Ficha 3)
+  def validMoves(board: Board, player: Stone, lstOpenCoords: List[Coord2D]): List[(Coord2D, Coord2D)] = {
+    val playerStones = board.filter(_._2 == player).keys.toList
+    for {
+      from <- playerStones
+      to   <- lstOpenCoords
+      (optBoard, _) = play(board, player, from, to, lstOpenCoords)
+      if optBoard.isDefined
+    } yield (from, to)
+  }
+
+  // Devolve movimentos de continuacao validos a partir de uma posicao especifica (multi-salto)
+  // Funcao de ordem superior com list comprehension (Ficha 3)
+  def validMovesFrom(board: Board, player: Stone, from: Coord2D,
+                     lstOpenCoords: List[Coord2D]): List[(Coord2D, Coord2D)] =
+    for {
+      to <- lstOpenCoords
+      (optBoard, _) = play(board, player, from, to, lstOpenCoords)
+      if optBoard.isDefined
+    } yield (from, to)
+
   // ---------- T3: playRandomly ----------
-  // Funcao de ordem superior que joga aleatoriamente (Fichas 3, 4, 6)
-  // Recebe funcao f para selecionar coordenada aleatoriamente
-  def playRandomly(board: Board, r: MyRandom, player: Stone,
+
+  // Funcao de ordem superior: joga aleatoriamente usando a funcao f para selecionar coordenadas
+  // Recebe e devolve MyRandom (pureza funcional - Fichas 3, 4, 6)
+  // Devolve Option[(from, to)] para que o chamador possa mostrar a jogada efectuada
+  def playRandomly(board: Board,
+                   r: MyRandom,
+                   player: Stone,
                    lstOpenCoords: List[Coord2D],
                    f: (List[Coord2D], MyRandom) => (Coord2D, MyRandom)
-                  ): (Option[Board], MyRandom, List[Coord2D], Option[Coord2D]) = {
-    val validMoves = getValidMoves(board, player, lstOpenCoords)
-    validMoves match {
-      case Nil => (None, r, lstOpenCoords, None)
-      case _ =>
-        // Obter lista de destinos e escolher um aleatoriamente via f
-        val destinations = validMoves.map { case (_, to) => to }
-        val (chosenTo, newRand) = f(destinations, r)
+                  ): (Option[Board], MyRandom, List[Coord2D], Option[(Coord2D, Coord2D)]) = {
 
-        // Encontrar a origem correspondente ao destino escolhido
-        // (tail recursion com pattern matching - Fichas 2, 3)
-        @tailrec
-        def findFrom(moves: List[(Coord2D, Coord2D)]): Coord2D = moves match {
-          case (from: Coord2D, to) :: tail =>
-            if (to == chosenTo) from
-            else findFrom(tail)
-          case Nil => validMoves.head._1 // fallback
-        }
+    val moves = validMoves(board, player, lstOpenCoords)
 
-        val chosenFrom = findFrom(validMoves)
-        play(board, player, chosenFrom, chosenTo, lstOpenCoords) match {
-          case (Some(newBoard), newOpenCoords) =>
-            (Some(newBoard), newRand, newOpenCoords, Some(chosenTo))
-          case (None, _) =>
-            (None, newRand, lstOpenCoords, None)
-        }
+    if (moves.isEmpty) {
+      (None, r, lstOpenCoords, None)
+    } else {
+      // Usa a funcao f (HOF) para selecionar aleatoriamente a pedra a mover
+      val validFroms = moves.map(_._1).distinct
+      val (selectedFrom, nextR) = f(validFroms, r)
+      val possibleTos = moves.filter(_._1 == selectedFrom).map(_._2)
+      val selectedTo = possibleTos.head
+
+      // Efectua a jogada (sabemos que e valida) - match exaustivo para evitar pattern refutavel
+      play(board, player, selectedFrom, selectedTo, lstOpenCoords) match {
+        case (Some(newBoard), newOpen) => (Some(newBoard), nextR, newOpen, Some((selectedFrom, selectedTo)))
+        case (None, _) => (None, nextR, lstOpenCoords, None)
+      }
     }
   }
 
   // ---------- T4: displayBoard ----------
-  // Representacao visual do tabuleiro (recursao + pattern matching - Ficha 2)
-  def displayBoard(board: Board, rows: Int, cols: Int): String = {
-    val seqBoard = board.seq
 
-    def cellToString(r: Int, c: Int): String = seqBoard.get((r, c)) match {
-      case Some(Stone.Black) => " B"
-      case Some(Stone.White) => " W"
-      case None              => " ."
+  // Imprime cabecalho de colunas usando tail recursion (Ficha 2)
+  @tailrec
+  private def printHeader(c: Int, cols: Int): Unit =
+    if (c < cols) {
+      print(s"$c ")
+      printHeader(c + 1, cols)
     }
 
-    // Constroi uma linha do tabuleiro (recursao - Ficha 2)
-    def buildCells(r: Int, c: Int): String = {
-      if (c >= cols) ""
-      else cellToString(r, c) + " " + buildCells(r, c + 1)
-    }
-
-    // Constroi todas as linhas (recursao - Ficha 2)
-    def buildRows(r: Int): List[String] = {
-      if (r >= rows) Nil
-      else {
-        val rowLabel = if (r < 10) s" $r " else s"$r "
-        (rowLabel + buildCells(r, 0)) :: buildRows(r + 1)
+  // Imprime as celulas de uma linha usando tail recursion e pattern matching (Ficha 2)
+  @tailrec
+  private def printCols(board: Board, r: Int, cols: Int, c: Int): Unit =
+    if (c < cols) {
+      board.get((r, c)) match {
+        case Some(Stone.Black) => print("B ")
+        case Some(Stone.White) => print("W ")
+        case None              => print(". ")
       }
+      printCols(board, r, cols, c + 1)
     }
 
-    // Cabecalho das colunas
-    def buildHeader(c: Int): String = {
-      if (c >= cols) ""
-      else {
-        val label = if (c < 10) s" $c" else s"$c"
-        " " + label + buildHeader(c + 1)
-      }
+  // Imprime todas as linhas do tabuleiro usando tail recursion (Ficha 2)
+  @tailrec
+  def printRows(board: Board, rows: Int, cols: Int, r: Int): Unit =
+    if (r < rows) {
+      print(s"$r ")
+      printCols(board, r, cols, 0)
+      println()
+      printRows(board, rows, cols, r + 1)
     }
 
-    val header = "  " + buildHeader(0)
-    (header :: buildRows(0)).mkString("\n")
-  }
-
+  // Representacao visual do tabuleiro na linha de comando (T4)
   def printBoard(board: Board, rows: Int, cols: Int): Unit = {
-    println(displayBoard(board, rows, cols))
+    print("  ")
+    printHeader(0, cols)
+    println()
+    printRows(board, rows, cols, 0)
   }
+
+  // ---------- T5: isOver ---------- //
+  // Verifica se o jogador actual nao tem jogadas validas (perdeu o jogo)
+  def isOver(board: Board, player: Stone, lstOpenCoords: List[Coord2D]): Boolean =
+    validMoves(board, player, lstOpenCoords).isEmpty
+
+  // Conta o número de pedras de um jogador usando foldLeft (Ficha 4 - Folding)
+  def countStones(board: Board, player: Stone): Int =
+    board.foldLeft(0) { case (acc, (_, stone)) =>
+      if (stone == player) acc + 1 else acc
+    }
 }
