@@ -11,7 +11,7 @@ object Main {
     println("=== Jogo Konane ===")
     println()
 
-    val (rows, cols) = (4,4)
+    val (rows, cols) = chooseSize()
     val (board, openCoords) = initBoard(rows, cols)
 
     println()
@@ -26,50 +26,98 @@ object Main {
     println("Black começa a jogar.")
     println()
 
-    // Seed baseada no tempo para resultados diferentes a cada execucao (Ficha 6)
     val rand = MyRandom(System.currentTimeMillis())
 
-    // Inicia o ciclo de jogo - Black joga primeiro
     gameLoop(board, openCoords, Stone.Black, playerStone, rand, rows, cols)
   }
+  
+  @tailrec
+  def chooseSize(): (Int,Int) = {
+    print(s"Board Size (4-10) (axa): a = ")
+    val input = readLine().trim
+    input.toIntOption match {
+      case Some(size) if size >= 4 && size <= 10 =>
+        (size, size)   // retorna o par (linhas, colunas)
+      case _ =>
+        println("Tamanho inválido. Introduza um número inteiro entre 4 e 10.")
+        chooseSize()
+    }
+    
+  }
 
-  // ---------- Ciclo de jogo principal (tail recursion - Fichas 2, 6) ----------
-
-  // Estado do jogo passa como parametros - imutabilidade (Ficha 5)
   @tailrec
   def gameLoop(board: Board, lstOpenCoords: List[Coord2D], currentPlayer: Stone,
                playerStone: Stone, rand: MyRandom, rows: Int, cols: Int): Unit = {
 
-    println()
     printBoard(board, rows, cols)
-    println(s"  Black: ${countStones(board, Stone.Black)} pedras | White: ${countStones(board, Stone.White)} pedras")
+
+    println()
+    println(s"Black: ${countStones(board, Stone.Black)} pedras | White: ${countStones(board, Stone.White)} pedras")
     println()
 
     if (isOver(board, currentPlayer, lstOpenCoords)) {
-      // Jogador sem jogadas validas perde (T5)
       val winner = opponent(currentPlayer)
       println(s"${stoneName(currentPlayer)} nao tem jogadas validas!")
       println(s"=== ${stoneName(winner)} GANHOU o jogo! ===")
 
     } else if (currentPlayer == playerStone) {
-      // Turno do jogador player
       println(s"--- Sua vez (${stoneName(playerStone)}) ---")
+      println()
       val (newBoard, newOpen) = doplayerTurn(board, lstOpenCoords, playerStone, rows, cols, None)
       gameLoop(newBoard, newOpen, opponent(playerStone), playerStone, rand, rows, cols)
 
     } else {
-      // Turno do computador (jogada aleatoria com playRandomly - T3)
+      // Turno do computador (agora com multissalto)
       println(s"--- Vez do Computador (${stoneName(currentPlayer)}) ---")
-      val (optBoard, nextRand, newOpen, optTo) =
-        playRandomly(board, rand, currentPlayer, lstOpenCoords, randomMove)
+      println()
+      val (newBoard, newOpen, nextRand) =
+        computerTurn(board, lstOpenCoords, currentPlayer, rand, rows, cols, None)
+      gameLoop(newBoard, newOpen, opponent(currentPlayer), playerStone, nextRand, rows, cols)
+    }
+  }
 
-      optBoard match {
-        case Some(newBoard) =>
-          println(s"Computador jogou para: ${optTo.get}")
-          gameLoop(newBoard, newOpen, opponent(currentPlayer), playerStone, nextRand, rows, cols)
-        case None =>
-          // Situacao coberta pelo isOver acima, mas tratada por seguranca
-          println(s"=== ${stoneName(playerStone)} GANHOU o jogo! ===")
+
+
+
+  @tailrec
+  def computerTurn(board: Board, openCoords: List[Coord2D], computerStone: Stone, rand: MyRandom, rows: Int, cols: Int,
+                   fromOpt: Option[Coord2D]): (Board, List[Coord2D], MyRandom) = {
+
+    // Movimentos válidos a partir da situação atual (todos ou só de uma peça específica)
+    val moves = fromOpt match {
+      case None => validMoves(board, computerStone, openCoords)
+      case Some(fromPos) => validMovesFrom(board, computerStone, fromPos, openCoords)
+    }
+
+    if (moves.isEmpty) {
+      // Sem continuação possível – fim do turno
+      (board, openCoords, rand)
+    } else {
+      // Escolhe aleatoriamente um movimento
+      val (index, nextRand) = rand.nextInt(moves.length)
+      val (from, to) = moves(index)
+
+      // Executa o movimento
+      play(board, computerStone, from, to, openCoords) match {
+        case (Some(newBoard), newOpen) =>
+          // Mostra o tabuleiro atualizado após o salto
+          println(s"Computador moveu: $from -> $to")
+          println()
+          printBoard(newBoard, rows, cols)
+          println()
+
+          // Verifica se pode continuar a saltar a partir da nova posição
+          val contMoves = validMovesFrom(newBoard, computerStone, to, newOpen)
+          if (contMoves.isEmpty) {
+            (newBoard, newOpen, nextRand)          // Fim do turno
+          } else {
+            // Continua recursivamente com a mesma peça
+            computerTurn(newBoard, newOpen, computerStone, nextRand, rows, cols, Some(to))
+          }
+
+        case (None, _) =>
+          // Situação inesperada (não deveria ocorrer)
+          (board, openCoords, rand)
       }
     }
   }
@@ -77,19 +125,18 @@ object Main {
   // ---------- Turno do jogador playero com suporte a multi-salto (recursao - Ficha 2) ----------
 
   // fromOpt: None = primeiro salto (pode escolher qualquer pedra)
-  //          Some(pos) = continuacao (tem de usar a mesma pedra em 'pos')
-  // Recursao: chamada recursiva em posicao de cauda (Ficha 2)
+
   def doplayerTurn(board: Board, lstOpenCoords: List[Coord2D], player: Stone,
                   rows: Int, cols: Int, fromOpt: Option[Coord2D]): (Board, List[Coord2D]) = {
 
     // Determina jogadas possiveis usando pattern matching em Option (Ficha 5)
     val moves = fromOpt match {
-      case None       => validMoves(board, player, lstOpenCoords)
+      case None => validMoves(board, player, lstOpenCoords)
       case Some(from) => validMovesFrom(board, player, from, lstOpenCoords)
     }
 
     if (moves.isEmpty) {
-      (board, lstOpenCoords) // sem continuacao possivel - devolve estado actual
+      (board, lstOpenCoords) // sem continuacao possivel - devolve estado atual
     } else {
       fromOpt match {
         case None    => println("Jogadas validas:")
@@ -102,7 +149,6 @@ object Main {
       play(board, player, from, to, lstOpenCoords) match {
         case (Some(newBoard), newOpen) =>
           println()
-          printBoard(newBoard, rows, cols)
 
           // Verifica se pode continuar a saltar com a mesma pedra (multi-salto)
           val contMoves = validMovesFrom(newBoard, player, to, newOpen)
@@ -155,9 +201,9 @@ object Main {
 
   @tailrec
   def getAt[A](lst: List[A], index: Int): Option[A] = lst match {
-    case Nil                      => None
-    case head :: _ if index == 0  => Some(head)
-    case _ :: tail                => getAt(tail, index - 1)
+    case Nil  => None
+    case head :: _ if index == 0 => Some(head)
+    case _ :: tail => getAt(tail, index - 1)
   }
 
   // ---------- Escolha de jogada pelo utilizador (IO + tail recursion + Option - Fichas 2, 5, 6) ----------

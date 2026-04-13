@@ -5,7 +5,7 @@ import scala.collection.parallel.immutable.ParMap
 import scala.collection.parallel.CollectionConverters.*
 import scala.annotation.tailrec
 
-// Tipos obrigatorios do enunciado
+// Tipos obrigatórios do enunciado
 type Coord2D = (Int, Int) // (row, column)
 type Board = ParMap[Coord2D, Stone]
 
@@ -24,8 +24,7 @@ object GameLogic {
 
   // Gera todas as posicoes do tabuleiro com pedras alternadas usando tail recursion (Ficha 2)
   @tailrec
-  private def generatePositions(rows: Int, cols: Int, r: Int, c: Int,
-                                acc: List[(Coord2D, Stone)]): List[(Coord2D, Stone)] = {
+  private def generatePositions(rows: Int, cols: Int, r: Int, c: Int, acc: List[(Coord2D, Stone)]): List[(Coord2D, Stone)] = {
     if (r >= rows) acc
     else if (c >= cols) generatePositions(rows, cols, r + 1, 0, acc)
     else {
@@ -122,10 +121,7 @@ object GameLogic {
   // Funcao de ordem superior: joga aleatoriamente usando a funcao f para selecionar coordenadas
   // Recebe e devolve MyRandom (pureza funcional - Fichas 3, 4, 6)
   // Devolve Option[(from, to)] para que o chamador possa mostrar a jogada efectuada
-  def playRandomly(board: Board,
-                   r: MyRandom,
-                   player: Stone,
-                   lstOpenCoords: List[Coord2D],
+  def playRandomly(board: Board, r: MyRandom, player: Stone, lstOpenCoords: List[Coord2D],
                    f: (List[Coord2D], MyRandom) => (Coord2D, MyRandom)
                   ): (Option[Board], MyRandom, List[Coord2D], Option[(Coord2D, Coord2D)]) = {
 
@@ -140,7 +136,7 @@ object GameLogic {
       val possibleTos = moves.filter(_._1 == selectedFrom).map(_._2)
       val selectedTo = possibleTos.head
 
-      // Efectua a jogada (sabemos que e valida) - match exaustivo para evitar pattern refutavel
+      // Efetua a jogada (sabemos que valida) - match exaustivo para evitar pattern refutável
       play(board, player, selectedFrom, selectedTo, lstOpenCoords) match {
         case (Some(newBoard), newOpen) => (Some(newBoard), nextR, newOpen, Some((selectedFrom, selectedTo)))
         case (None, _) => (None, nextR, lstOpenCoords, None)
@@ -150,7 +146,7 @@ object GameLogic {
 
   // ---------- T4: displayBoard ----------
 
-  // Imprime cabecalho de colunas usando tail recursion (Ficha 2)
+  // Imprime cabeçalho de colunas usando tail recursion (Ficha 2)
   @tailrec
   private def printHeader(c: Int, cols: Int): Unit =
     if (c < cols) {
@@ -158,7 +154,7 @@ object GameLogic {
       printHeader(c + 1, cols)
     }
 
-  // Imprime as celulas de uma linha usando tail recursion e pattern matching (Ficha 2)
+  // Imprime as células de uma linha usando tail recursion e pattern matching (Ficha 2)
   @tailrec
   private def printCols(board: Board, r: Int, cols: Int, c: Int): Unit =
     if (c < cols) {
@@ -180,7 +176,7 @@ object GameLogic {
       printRows(board, rows, cols, r + 1)
     }
 
-  // Representacao visual do tabuleiro na linha de comando (T4)
+  // Representação visual do tabuleiro na linha de comando (T4)
   def printBoard(board: Board, rows: Int, cols: Int): Unit = {
     print("  ")
     printHeader(0, cols)
@@ -189,7 +185,7 @@ object GameLogic {
   }
 
   // ---------- T5: isOver ---------- //
-  // Verifica se o jogador actual nao tem jogadas validas (perdeu o jogo)
+  // Verifica se o jogador atual não tem jogadas validas (perdeu o jogo)
   def isOver(board: Board, player: Stone, lstOpenCoords: List[Coord2D]): Boolean =
     validMoves(board, player, lstOpenCoords).isEmpty
 
