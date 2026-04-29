@@ -8,11 +8,12 @@
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
         <option name="modules">
           <set>
-            <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/project" />
+            <option value="$PROJECT_DIR$/../JG12_DanielSilva&amp;129859_FranciscoSilva&amp;129868_GustavoGonçalves&amp;131410" />
+            <option value="$PROJECT_DIR$/../JG12_DanielSilva&amp;129859_FranciscoSilva&amp;129868_GustavoGonçalves&amp;131410/project" />
           </set>
         </option>
         <option name="resolveSbtClassifiers" value="true" />
+        <option name="sbtVersion" value="1.12.9" />
         <option name="useSbtShellForImport" value="true" />
       </SbtProjectSettings>
     </option>
